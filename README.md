@@ -28,14 +28,7 @@ Please follow the environment setup procedure from `reports/step3_environment.md
 ```bash
 # Navigate to the MCP directory
 cd tool-mcps/amber_mcp
-
-bash quick_setup.sh
-
-mamba create -p ./env python=3.11 -y
-mamba activate ./env
-
-# Install MCP dependencies
-pip install fastmcp loguru --ignore-installed
+./quick_setup.sh
 ```
 ## Local Usage (Scripts)
 

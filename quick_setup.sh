@@ -15,8 +15,11 @@
 #   --jobs N             Number of parallel jobs (default: auto-detect)
 #   --skip-fixes         Skip applying source code fixes (use if already applied)
 #   --clean              Clean build directory before building
-#   --cuda               Enable CUDA/GPU support (auto-detects CUDA path)
+#   --cuda               Enable CUDA/GPU support (default: enabled)
+#   --no-cuda            Disable CUDA/GPU support
 #   --cuda-path PATH     Path to CUDA toolkit (implies --cuda)
+#   --setup-env          Create mamba environment and install MCP dependencies (default: enabled)
+#   --no-setup-env       Skip mamba environment setup
 #   --help               Show this help message
 #
 # Prerequisites:
@@ -40,8 +43,9 @@ BUILD_DIR=""
 JOBS=$(nproc 2>/dev/null || echo 4)
 SKIP_FIXES=false
 CLEAN_BUILD=false
-ENABLE_CUDA=false
+ENABLE_CUDA=true
 CUDA_PATH=""
+SETUP_ENV=true
 
 #==============================================================================
 # Color output helpers
@@ -104,10 +108,22 @@ parse_args() {
                 ENABLE_CUDA=true
                 shift
                 ;;
+            --no-cuda)
+                ENABLE_CUDA=false
+                shift
+                ;;
             --cuda-path)
                 CUDA_PATH="$2"
                 ENABLE_CUDA=true
                 shift 2
+                ;;
+            --setup-env)
+                SETUP_ENV=true
+                shift
+                ;;
+            --no-setup-env)
+                SETUP_ENV=false
+                shift
                 ;;
             --help)
                 show_help
@@ -169,6 +185,89 @@ check_prerequisites() {
     done
 
     log_success "All prerequisites satisfied"
+}
+
+#==============================================================================
+# Setup mamba environment
+#==============================================================================
+
+setup_mamba_environment() {
+    log_info "Setting up mamba environment at $INSTALL_PREFIX..."
+
+    # Check if mamba is available
+    if ! command -v mamba &> /dev/null; then
+        log_error "mamba not found. Please install mamba first."
+        log_info "You can install mamba with: conda install -c conda-forge mamba"
+        exit 1
+    fi
+
+    # Remove existing environment if it exists
+    if [[ -d "$INSTALL_PREFIX" ]]; then
+        log_info "Removing existing environment at $INSTALL_PREFIX..."
+        rm -rf "$INSTALL_PREFIX"
+        log_success "Existing environment removed"
+    fi
+
+    # Create new environment
+    log_info "Creating new mamba environment with Python 3.11..."
+    mamba create -p "$INSTALL_PREFIX" python=3.11 -y
+
+    if [[ $? -ne 0 ]]; then
+        log_error "Failed to create mamba environment"
+        exit 1
+    fi
+    log_success "Mamba environment created"
+
+    # Activate the environment
+    log_info "Activating environment..."
+    eval "$(conda shell.bash hook)"
+    conda activate "$INSTALL_PREFIX"
+
+    if [[ $? -ne 0 ]]; then
+        log_error "Failed to activate mamba environment"
+        exit 1
+    fi
+    log_success "Environment activated"
+
+    # Install MCP dependencies
+    log_info "Installing MCP dependencies (fastmcp, loguru)..."
+    pip install fastmcp loguru --ignore-installed --quiet
+
+    if [[ $? -ne 0 ]]; then
+        log_error "Failed to install MCP dependencies"
+        exit 1
+    fi
+    log_success "MCP dependencies installed"
+
+    # Install build dependencies for AmberTools
+    log_info "Installing build dependencies for AmberTools..."
+    mamba install -y \
+        cmake \
+        gcc \
+        gxx \
+        gfortran \
+        openmpi \
+        openmpi-mpicc \
+        openmpi-mpicxx \
+        openmpi-mpifort \
+        netcdf-fortran \
+        netcdf4 \
+        boost \
+        fftw \
+        arpack \
+        flex \
+        bison \
+        patch \
+        make \
+        2>&1 | tee mamba_install.log
+
+    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        log_warning "Some mamba packages may have failed to install. Check mamba_install.log"
+    fi
+
+    log_success "Environment setup completed"
+    echo ""
+    log_info "Environment is ready. You may need to re-run this script without --setup-env to build AmberTools."
 }
 
 #==============================================================================
@@ -717,6 +816,14 @@ main() {
     log_info "Build directory: $BUILD_DIR"
     log_info "Parallel jobs: $JOBS"
     echo ""
+
+    # Setup mamba environment if requested
+    if [[ "$SETUP_ENV" == true ]]; then
+        setup_mamba_environment
+        echo ""
+        log_info "Environment setup complete. Continuing with build..."
+        echo ""
+    fi
 
     check_prerequisites
     echo ""
