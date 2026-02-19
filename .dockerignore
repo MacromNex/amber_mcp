@@ -1,0 +1,37 @@
+# Git
+.git/
+.github/
+.gitignore
+
+# IDE and editor files
+.vscode/
+.claude/
+.gemini/
+*.swp
+
+# Build artifacts and caches
+__pycache__/
+*.egg-info/
+*.pyc
+.pipeline/
+
+# Output directories (not needed for build)
+results/
+jobs/
+output/
+test_output/
+tmp/
+claude_outputs/
+example/
+examples/
+
+# Reports and templates
+reports/
+templates/
+
+# Data directory
+data/
+
+# Keep repo/ (needed for AmberTools source build)
+# Keep src/ (MCP server code)
+# Keep quick_setup.sh (build script)
