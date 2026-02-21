@@ -68,6 +68,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy the build script and source code
 COPY quick_setup.sh ./
 COPY repo/ambertools25_src ./repo/ambertools25_src/
+RUN chmod -R a+r /app/repo/
 
 # Build AmberTools25 (CPU-only, skip env setup since we did it above)
 RUN bash quick_setup.sh \
@@ -103,6 +104,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Copy the MCP server source
 COPY src/ ./src/
+RUN chmod -R a+r /app/src/
 
 # Create working directories
 RUN mkdir -p results jobs tmp
