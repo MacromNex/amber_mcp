@@ -5,11 +5,17 @@
 # Builds AmberTools25 + PMEMD24 from source and sets up the FastMCP server
 # for molecular dynamics simulations.
 #
-# Prerequisites:
-#   The repo/ambertools25_src directory must be present in the build context
-#   with the AmberTools25 source code (including PMEMD24 merged).
+# The AmberTools25 build is CONDITIONAL:
+#   - CI / base image builds succeed without the source (dependencies only).
+#   - For a full local build, place the AmberTools25 source (with PMEMD24
+#     merged in) at repo/ambertools25_src/ before running docker build.
 #
-# Build (CPU-only):
+# Build (CI / base image - no source required):
+#   docker build -t amber_mcp .
+#
+# Build (local, full AmberTools install):
+#   # 1. Download AmberTools25 + PMEMD24 and place merged source at:
+#   #      repo/ambertools25_src/
 #   docker build -t amber_mcp .
 #
 # Build (with CUDA - requires NVIDIA base image swap):
@@ -65,18 +71,32 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install fastmcp loguru 'numpy<2.0'
 
 # ---- Build layer ----
-# Copy the build script and source code
+# Copy the build script; create repo dir placeholder (source may not exist in CI)
 COPY quick_setup.sh ./
-COPY repo/ambertools25_src ./repo/ambertools25_src/
-RUN chmod -R a+r /app/repo/
+RUN mkdir -p repo
 
-# Build AmberTools25 (CPU-only, skip env setup since we did it above)
-RUN bash quick_setup.sh \
-        --source-dir /app/repo/ambertools25_src \
-        --install-prefix /app/env \
-        --no-cuda \
-        --no-setup-env \
-        --clean
+# Conditionally copy and build AmberTools25 if source is present.
+# In CI the source is not available (proprietary), so this is a no-op there.
+# For local builds, place source at repo/ambertools25_src/ before running
+# docker build, and it will be copied and compiled here.
+COPY . /build_context_tmp/
+RUN if [ -d /build_context_tmp/repo/ambertools25_src ]; then \
+        echo "AmberTools25 source found - building full installation"; \
+        cp -r /build_context_tmp/repo/ambertools25_src /app/repo/ambertools25_src; \
+        chmod -R a+r /app/repo/; \
+        bash quick_setup.sh \
+            --source-dir /app/repo/ambertools25_src \
+            --install-prefix /app/env \
+            --no-cuda \
+            --no-setup-env \
+            --clean; \
+    else \
+        echo "AmberTools25 source not found - building base image without AmberTools"; \
+        echo "For local builds with AmberTools, place source at repo/ambertools25_src/"; \
+    fi
+
+# Ensure /app/env exists even if AmberTools was not built (needed for runtime COPY)
+RUN mkdir -p /app/env
 
 # ---------------------------------------------------------------------------
 # Runtime stage - keep only what's needed
@@ -92,7 +112,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy the compiled Amber environment from builder
+# Copy the compiled Amber environment from builder (may be empty in CI builds)
 COPY --from=builder /app/env /app/env
 
 # Copy conda packages (runtime libraries: openmpi, netcdf, fftw, etc.)
@@ -117,7 +137,7 @@ ENV LD_LIBRARY_PATH="/app/env/lib:${LD_LIBRARY_PATH}"
 ENV PYTHONPATH=/app
 ENV OPAL_PREFIX=/opt/conda
 
-# Source amber.sh environment on shell entry
+# Source amber.sh environment on shell entry (only if present)
 RUN echo 'test -f /app/env/amber.sh && source /app/env/amber.sh' >> /etc/bash.bashrc
 
 CMD ["python", "src/server.py"]
