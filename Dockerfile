@@ -127,7 +127,7 @@ COPY src/ ./src/
 RUN chmod -R a+r /app/src/
 
 # Create working directories
-RUN mkdir -p results jobs tmp
+RUN mkdir -p results jobs tmp && chmod 777 /app /app/results /app/jobs /app/tmp
 
 # Set environment variables for Amber
 ENV AMBERHOME=/app/env
