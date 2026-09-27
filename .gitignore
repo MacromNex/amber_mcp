@@ -1,5 +1,5 @@
 example/
-data/
+/data/
 results/
 __pycache__/
 *.swp
@@ -16,7 +16,7 @@ reports/
 templates/
 .gemini/
 repo/
-jobs/
+/jobs/
 output/
 test_output/
 examples/
